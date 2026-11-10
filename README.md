@@ -4,6 +4,10 @@ Internal React/Vite dealership workspace with Supabase email/password authentica
 
 **Live sending is disabled by default. Do not enable it without explicit owner approval and completion of the verification checklist in [the deployment runbook](docs/DEPLOYMENT.md).** No real WhatsApp messages were sent during development.
 
+## Large-feed stock refresh
+
+Stock refresh now runs in a Netlify Background Function with durable status polling, a 180-second upstream budget and a 64 MiB decoded-body cap. Apply the new upgrade migration before deployment. See [docs/STOCK_REFRESH.md](docs/STOCK_REFRESH.md) for limit investigation, exact deployment settings, failure codes and regression coverage. Stock records are delivered to the browser in bounded pages; the raw feed is never returned or stored. PostX sending behavior/settings are unchanged.
+
 ## Development
 
 Use Node.js 22.12+ and npm (validated with Node 24).

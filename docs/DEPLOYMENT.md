@@ -8,6 +8,7 @@ Back up/inspect the target Supabase project first. Apply once, in order, using t
 
 1. `supabase/migrations/202611100001_integration.sql`
 2. `supabase/migrations/202611100002_dealership_seed.sql`
+3. `supabase/migrations/202611110001_background_stock_refresh.sql` (for this release; see [large-feed refresh](STOCK_REFRESH.md))
 
 The first creates vehicle stock, dealership settings, campaigns, independent vehicle snapshots, private queue batches, PII-free recipient results, sync status, an explicit authorized-user allowlist, RLS and service-only transactional RPCs. The second seeds all 57 supplied PostX group mappings as **inactive, unverified and without DealerOS IDs/templates**. Existing dealership configuration is not deleted by synchronization.
 

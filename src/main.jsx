@@ -136,6 +136,41 @@ function Dashboard({ session, signOut }) {
     }, 15000);
     return () => clearInterval(timer);
   }, [page]);
+  useEffect(() => {
+    if (!["queued", "running"].includes(data.sync.status)) return;
+    let active = true,
+      inFlight = false;
+    const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const { sync } = await api("stock-status");
+        if (!active) return;
+        if (sync.status === "succeeded") {
+          await load();
+          if (active)
+            setNotice(
+              `Stock synchronized: ${sync.vehicle_count} vehicles. Job ${sync.job_id}.`,
+            );
+        } else if (sync.status === "failed") {
+          setData((current) => ({ ...current, sync }));
+          setError(`${sync.error_code}: ${sync.error} Job ${sync.job_id}.`);
+        } else {
+          setData((current) => ({ ...current, sync }));
+        }
+      } catch (e) {
+        if (active) setError(e.message);
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = setInterval(poll, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [data.sync.status, data.sync.job_id]);
+  const syncActive = ["queued", "running"].includes(data.sync.status);
   const config = data.dealerships.find((d) => d.id === dealer);
   const vehicles = data.vehicles.filter(
     (v) => v.dealership_id === config?.dealeros_id,
@@ -158,8 +193,20 @@ function Dashboard({ session, signOut }) {
     setError("");
     try {
       const r = await api("refresh", {});
-      await load();
-      setNotice(`Stock synchronized: ${r.count} vehicles.`);
+      const { sync } = await api("stock-status");
+      setData((current) => ({ ...current, sync }));
+      if (sync.status === "succeeded") {
+        await load();
+        setNotice(
+          `Stock synchronized: ${sync.vehicle_count} vehicles. Job ${sync.job_id}.`,
+        );
+      } else if (sync.status === "failed") {
+        setError(`${sync.error_code}: ${sync.error} Job ${sync.job_id}.`);
+      } else {
+        setNotice(
+          `Stock refresh accepted (job ${r.job_id}). The background worker will report completion here; it is safe to close the browser.`,
+        );
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -313,6 +360,19 @@ function Dashboard({ session, signOut }) {
             </label>
           </div>
           {loading && <p role="status">Loading your workspace…</p>}
+          {syncActive && (
+            <div className="notice" role="status">
+              Stock refresh {data.sync.status} · {data.sync.phase} · Job{" "}
+              {data.sync.job_id}. Large feeds can take several minutes.
+              Completion is confirmed by the database, not the initial
+              acceptance response.
+            </div>
+          )}
+          {data.sync.status === "failed" && (
+            <div className="alert" role="alert">
+              {data.sync.error_code}: {data.sync.error} Job {data.sync.job_id}.
+            </div>
+          )}
           {error && (
             <div className="notice form-error" role="alert">
               {error}
@@ -491,9 +551,13 @@ function Dashboard({ session, signOut }) {
                       · {data.sync.vehicle_count || 0} total vehicles
                     </p>
                   </div>
-                  <Button secondary disabled={refreshing} onClick={refresh}>
+                  <Button
+                    secondary
+                    disabled={refreshing || syncActive}
+                    onClick={refresh}
+                  >
                     <RefreshCw size={16} />
-                    {refreshing ? "Refreshing…" : "Refresh stock"}
+                    {refreshing || syncActive ? "Refreshing…" : "Refresh stock"}
                   </Button>
                 </div>
                 {data.sync.error && (
@@ -512,12 +576,14 @@ function Dashboard({ session, signOut }) {
                 <Button
                   secondary
                   disabled={
-                    refreshing || new Date(data.sync.lease_until) > new Date()
+                    refreshing ||
+                    syncActive ||
+                    new Date(data.sync.lease_until) > new Date()
                   }
                   onClick={refresh}
                 >
                   <RefreshCw size={17} />
-                  {refreshing ? "Refreshing…" : "Refresh stock"}
+                  {refreshing || syncActive ? "Refreshing…" : "Refresh stock"}
                 </Button>
               </Heading>
               <p className="stock-status">
