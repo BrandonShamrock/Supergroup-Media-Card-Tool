@@ -11,14 +11,27 @@ npm ci
 npm run dev
 ```
 
-Open the local address printed by Vite. The overview opens by default. Use the exit icon beside the demo user to open the visual login page, then **Explore demo workspace** to return. Login fields are disabled to prevent collection of real credentials; this is not authentication and provides no access protection.
+Configure the two environment variables below in an ignored `.env.local` file for local development, then open the address printed by Vite. Unauthenticated visitors see the login screen. Sign in with an account manually created in Supabase. There is no public sign-up or password reset. The top-bar sign-out button calls Supabase Auth and returns to login.
 
 ```sh
 npm run build
 npm run preview
 ```
 
-The production output is `dist/`. `netlify.toml` configures `npm run build`, publishes `dist`, and rewrites routes to `index.html`. Connect this repository and select the feature branch to deploy a review build on Netlify. No environment variables or API credentials are needed. Deployment has not been performed by this change.
+The production output is `dist/`. `netlify.toml` configures `npm run build`, publishes `dist`, and rewrites routes to `index.html`. Connect this repository and select the feature branch to deploy a review build on Netlify. Deployment has not been performed by this change.
+
+## Supabase and Netlify environment variables
+
+Set these in Netlify **Site configuration → Environment variables**, with build access and the appropriate production/preview contexts:
+
+- `VITE_SUPABASE_URL`: your project's HTTPS Supabase URL.
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: your project's browser-safe publishable key (`sb_publishable_…`).
+
+Use the same names in an ignored `.env.local` for local development. No project values are committed. Vite embeds these public settings at build time; trigger a fresh Netlify deploy after changing them. Missing or invalid settings leave sign-in disabled and never mount dashboard pages. Secret keys and legacy service-role keys are not accepted. Never put Supabase secret/service-role keys in any `VITE_` variable.
+
+Create users manually through Supabase Auth. This app only uses email/password sign-in. Session restoration is verified with Supabase Auth before dashboard content mounts; checking and failed requests fail closed. The SDK persists authentication tokens in browser storage and refreshes sessions. Passwords are cleared after sign-in attempts and are not saved by application code. Sign-out attempts to revoke sessions and clears the local session; failures display safe guidance.
+
+Client-side route protection is not sufficient to secure backend data. Future database tables must use Row Level Security (RLS), and future server-side messaging functions must independently authorize every request. This change grants no dealership-level roles or data permissions.
 
 ## Review the prototype
 
@@ -31,7 +44,10 @@ The production output is `dist/`. `netlify.toml` configures `npm run build`, pub
 
 ## Files
 
-- `src/main.jsx`: application state, mock fixtures, reusable brand/button/heading components, page views and navigation.
+- `src/main.jsx`: dashboard state, mock fixtures, reusable components, views and navigation.
+- `src/Auth.jsx`: authentication gate, session verification, loading, sign-in and sign-out.
+- `src/supabase.js`: environment-based browser client with fail-closed configuration checks.
+- `playwright.config.js` / `tests/auth.spec.js`: isolated browser tests with mocked Auth responses.
 - `src/styles.css`: desktop dashboard, responsive layout, focus treatments and reduced-motion support.
 - `public/vehicle.svg`: local representative vehicle illustration, used for all sample vehicles.
 - `index.html`: Vite entry point and metadata.
@@ -40,25 +56,26 @@ The production output is `dist/`. `netlify.toml` configures `npm run build`, pub
 
 ## Scope and data handling
 
-All dealerships, inventory, prices and campaign history are mock data. There is no Supabase, stock-feed API, PostX, authentication service or message delivery. No credentials, client data, cookies or browser storage are used. No real client data should be selected. No external image or font requests are needed.
+All dealerships, inventory, prices and campaign history remain mock data. Only Supabase Auth is connected; no database tables, stock-feed API, PostX or message delivery are used. Authentication sessions use browser storage through the Supabase SDK. No real client data should be selected. No external image or font requests are needed.
 
 Navigation is intentionally in-memory; reload returns to Overview. The Netlify fallback supports serving the app for arbitrary paths, but this prototype does not map URL paths to individual screens.
 
 ## Validation
 
-- `npm run build`: passed with Vite production assets generated.
-- Chromium browser smoke checks: overview rendering; six stock rows; selection and preview; disabled sending; sample file feedback; empty local/session storage; history; disabled login fields; refresh feedback; dealership selection reset; empty search results; 390px mobile navigation and no horizontal page overflow.
-- No browser runtime errors observed. Desktop and mobile screenshots inspected during development.
+```sh
+npm ci
+npm run build
+# First-time browser setup on a development machine:
+npx playwright install chromium
+npm test
+# Or use an existing Chromium installation:
+CHROMIUM_PATH=/usr/bin/chromium npm test
+```
 
-There is no existing automated test suite in the initial repository. Backend integration, real spreadsheet parsing, authentication and message delivery are outside this prototype’s scope.
+The browser tests start isolated Vite servers with invented test settings and intercept Auth requests; they do not contact a real Supabase project or create real accounts. Tests cover login gating, successful login, verified restoration, loading state, bad credentials, invalid sessions, network failure, missing configuration, cross-tab sign-out, logout, and the mock stock/preview workflow. Netlify SPA rewrites remain configured in `netlify.toml`; nested paths also load the login gate.
+
+`npm ci`, `npm run build`, and eight Chromium browser tests passed during implementation. Live project sign-in has not been tested because the required Supabase settings are not present in this environment. After configuring Netlify, verify a manually provisioned account can sign in, survive reload, and sign out; check unauthenticated deep links stay on login.
 
 ## Branch review
 
-The implementation is on `feat/frontend-foundation`, separate from `main`. Inspect with:
-
-```sh
-git diff main --stat
-git diff main
-```
-
-Run the commands above to review locally. Nothing has been merged into `main`.
+Changes are on `feat/supabase-auth`, based on the existing frontend foundation. Run `git diff feat/frontend-foundation...feat/supabase-auth` to review the authentication changes. Nothing is merged automatically.
