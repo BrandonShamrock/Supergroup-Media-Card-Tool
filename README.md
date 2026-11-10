@@ -1,81 +1,74 @@
 # Super Group Media Card Tool
 
-A responsive React + Vite frontend prototype for a dealership marketing workspace. Uses JavaScript, CSS, Lucide icons and local SVG vehicle illustrations. Desktop is the primary layout, with a mobile navigation drawer and scrollable stock table.
+Internal React/Vite dealership workspace with Supabase email/password authentication, DealerOS stock synchronization, customer spreadsheet validation and a server-side PostX media-carousel queue. The existing blue/white dashboard, navigation and authentication are retained. There is no public signup, password reset or dealership-specific role system.
 
-## Setup
+**Live sending is disabled by default. Do not enable it without explicit owner approval and completion of the verification checklist in [the deployment runbook](docs/DEPLOYMENT.md).** No real WhatsApp messages were sent during development.
 
-Use Node.js 22.12+ (or Node 20.19+) and npm. Development was validated with Node 24.22.1.
+## Development
+
+Use Node.js 22.12+ and npm (validated with Node 24).
 
 ```sh
 npm ci
 npm run dev
-```
-
-Configure the two environment variables below in an ignored `.env.local` file for local development, then open the address printed by Vite. Unauthenticated visitors see the login screen. Sign in with an account manually created in Supabase. There is no public sign-up or password reset. The top-bar sign-out button calls Supabase Auth and returns to login.
-
-```sh
 npm run build
 npm run preview
 ```
 
-The production output is `dist/`. `netlify.toml` configures `npm run build`, publishes `dist`, and rewrites routes to `index.html`. Connect this repository and select the feature branch to deploy a review build on Netlify. Deployment has not been performed by this change.
+Vite alone serves the frontend; the integration API requires Netlify Functions. Use a Netlify CLI installation with `netlify dev` and the configured project environment to run both locally. Do not use production customer information for local tests. Netlify deployment retains `npm run build`, `dist`, and the SPA fallback in `netlify.toml`.
 
-## Supabase and Netlify environment variables
+For authentication configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in an ignored `.env.local` file. Only public Supabase settings belong in Vite variables. Missing/invalid settings fail closed. The SDK persists authentication tokens in browser storage, restores and verifies sessions, and signs out across tabs. Passwords are cleared after attempts.
 
-Set these in Netlify **Site configuration → Environment variables**, with build access and the appropriate production/preview contexts:
+Backend operations additionally require the server settings and database migrations in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). A valid session alone is insufficient: the two approved users must be explicitly added to `authorized_users`. All protected backend actions verify the bearer token with Supabase Auth and check this allowlist. Database RLS denies access to other users; browsers cannot read queued recipient names/numbers or write integration tables/RPCs.
 
-- `VITE_SUPABASE_URL`: your project's HTTPS Supabase URL.
-- `VITE_SUPABASE_PUBLISHABLE_KEY`: your project's browser-safe publishable key (`sb_publishable_…`).
+## Workflow
 
-Use the same names in an ignored `.env.local` for local development. No project values are committed. Vite embeds these public settings at build time; trigger a fresh Netlify deploy after changing them. Missing or invalid settings leave sign-in disabled and never mount dashboard pages. Secret keys and legacy service-role keys are not accepted. Never put Supabase secret/service-role keys in any `VITE_` variable.
+1. Refresh stock. The full DealerOS feed is validated and staged before an atomic UPSERT and removal of absent vehicles. Empty, malformed, duplicate-ID, paginated, known-incomplete or >20% shrinking feeds are rejected without changing stock. Jobs use an exclusive leased lock. Only `listingImages` entries with numeric `order === 1` are retained; supported image fields are `url` or `image_url`.
+2. In Dealership Settings, manually map a discovered DealerOS ID to a seeded PostX group. Names produce suggestions only, including ambiguous matches. Verify mapping, approved template, card count and exact case-sensitive variable mappings. All 57 supplied group mappings start inactive and unverified. No global template is assumed.
+3. Select the dealership and stock cards in sending order. Missing primary images cannot be selected. Required card count is enforced. Changing dealerships clears selections.
+4. Upload `.xlsx` or `.csv` (first sheet, first row as headers), at most 5 MiB and 10,000 customer rows. Map distinct name and phone columns, validate and review. Names are required; ZA local numbers normalize to +27, explicit international prefixes are supported, duplicate normalized numbers are removed and invalid rows are reported. Keep phone columns as text to preserve leading zeroes and + signs. Only the first 10 validated recipients are displayed, with masked numbers. Duplicate counts and first 50 invalid row reasons are shown.
+5. Preview the ordered WhatsApp carousel, group, template, audience and expected batch count. The preview displays validation warnings. Real template copy/presentation is controlled by the approved PostX template.
+6. After explicit sending approval and endpoint-limit verification, enter a campaign name, affirm recipient consent, and type the final confirmation phrase to queue. Fresh DealerOS images and stock are checked at queue time and again before each worker attempt.
+7. The scheduled worker handles one bounded batch per invocation, independently of the browser. History polls every 15 seconds, showing submitted outcomes, errors, compact vehicle snapshots and correlation references. Accepted means accepted for processing, **not delivered**. Unknown outcomes are never automatically retried.
 
-Create users manually through Supabase Auth. This app only uses email/password sign-in. Session restoration is verified with Supabase Auth before dashboard content mounts; checking and failed requests fail closed. The SDK persists authentication tokens in browser storage and refreshes sessions. Passwords are cleared after sign-in attempts and are not saved by application code. Sign-out attempts to revoke sessions and clears the local session; failures display safe guidance.
+## Template mappings
 
-Client-side route protection is not sufficient to secure backend data. Future database tables must use Row Level Security (RLS), and future server-side messaging functions must independently authorize every request. This change grants no dealership-level roles or data permissions.
+Settings store JSON with `recipient` and `card` objects. Keys are the exact, case-sensitive approved template variable names. Values select source fields or `literal:your fixed value`. For example (illustrative only):
 
-## Review the prototype
+```json
+{
+  "recipient": { "client_interest": "literal:Suzuki" },
+  "card": { "car_type": "car_type", "year": "year", "mileage": "mileage" }
+}
+```
 
-1. Review the overview cards and choose a mock dealership. Changing dealership clears the vehicle selection; all dealerships deliberately use the same sample inventory.
-2. Open **Vehicle stock**. Search by make/model, select individual vehicles or all six, and use **Preview selection**. **Refresh stock** displays a demo confirmation; it makes no network request.
-3. Open **Client upload**. Use only invented sample `.xlsx` or `.xls` files. The interface checks the filename extension but never reads file contents or retains the filename. It does not parse, validate or upload spreadsheets. Selection feedback is held in memory and can be cleared.
-4. Open **Campaign preview** to review selected vehicles and dealership. Sending is disabled.
-5. Open **Campaign history** for static sample activity. No messages have been sent.
-6. Resize to mobile width and use the navigation menu. Reloading resets all transient selections.
+Card sources: `car_type`, `year`, `mileage`, `retail_price`, `make`, `model`, `derivative`, `stock_number`. Recipient sources: `name`, `dealership_name`. Empty objects are allowed for templates with no variables; operators must verify the exact approved schema in PostX.
 
-## Files
-
-- `src/main.jsx`: dashboard state, mock fixtures, reusable components, views and navigation.
-- `src/Auth.jsx`: authentication gate, session verification, loading, sign-in and sign-out.
-- `src/supabase.js`: environment-based browser client with fail-closed configuration checks.
-- `playwright.config.js` / `tests/auth.spec.js`: isolated browser tests with mocked Auth responses.
-- `src/styles.css`: desktop dashboard, responsive layout, focus treatments and reduced-motion support.
-- `public/vehicle.svg`: local representative vehicle illustration, used for all sample vehicles.
-- `index.html`: Vite entry point and metadata.
-- `package.json` / `package-lock.json`: scripts and locked dependencies.
-- `netlify.toml`: build and SPA fallback configuration.
-
-## Scope and data handling
-
-All dealerships, inventory, prices and campaign history remain mock data. Only Supabase Auth is connected; no database tables, stock-feed API, PostX or message delivery are used. Authentication sessions use browser storage through the Supabase SDK. No real client data should be selected. No external image or font requests are needed.
-
-Navigation is intentionally in-memory; reload returns to Overview. The Netlify fallback supports serving the app for arbitrary paths, but this prototype does not map URL paths to individual screens.
-
-## Validation
+## Tests
 
 ```sh
-npm ci
-npm run build
-# First-time browser setup on a development machine:
+npm run test:unit
 npx playwright install chromium
-npm test
-# Or use an existing Chromium installation:
+npm run test:browser
+# Or with an existing system Chromium:
 CHROMIUM_PATH=/usr/bin/chromium npm test
 ```
 
-The browser tests start isolated Vite servers with invented test settings and intercept Auth requests; they do not contact a real Supabase project or create real accounts. Tests cover login gating, successful login, verified restoration, loading state, bad credentials, invalid sessions, network failure, missing configuration, cross-tab sign-out, logout, and the mock stock/preview workflow. Netlify SPA rewrites remain configured in `netlify.toml`; nested paths also load the login gate.
+Unit/database tests use invented fixtures, mocked requests and embedded PostgreSQL (PGlite). They execute both SQL migrations and exercise stock safeguards, UPSERT/removal, RLS, leases, durable batches, fingerprint/idempotency protection, interrupted attempts, private PII cleanup, historical snapshots, parsing, numbers, mappings, payloads, batching, image security and PostX outcome correlation. Browser tests mock both Auth and the backend; they test login/session restrictions, stock selection, CSV/XLSX processing, settings and disabled sending. Test data does not describe real customers.
 
-`npm ci`, `npm run build`, and eight Chromium browser tests passed during implementation. Live project sign-in has not been tested because the required Supabase settings are not present in this environment. After configuring Netlify, verify a manually provisioned account can sign in, survive reload, and sign out; check unauthenticated deep links stay on login.
+Live DealerOS/PostX calls, a live Supabase migration and an actual Netlify deployment are **not** claimed as validated. Required credentials are absent from this workspace. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for remaining checks and operational limitations.
 
-## Branch review
+## Implementation map
 
-Changes are on `feat/supabase-auth`, based on the existing frontend foundation. Run `git diff feat/frontend-foundation...feat/supabase-auth` to review the authentication changes. Nothing is merged automatically.
+- `src/Auth.jsx`, `src/supabase.js`: existing session gate and Auth client.
+- `src/main.jsx`, `src/styles.css`: dashboard shell, real data/empty states, stock and history.
+- `src/CustomerUpload.jsx`, `src/DealershipSettings.jsx`, `src/CampaignPreview.jsx`: lazy-loaded workflows.
+- `src/api.js`: authenticated requests to Netlify Functions.
+- `shared/domain.js`: shared stock, recipient, template, payload and result validation.
+- `netlify/functions/api.js`: authorized reads/settings, stock refresh, preview and durable campaign queueing.
+- `netlify/functions/campaign-worker.js`: one scheduled batch per minute; no browser dependency.
+- `netlify/functions/lib/`: server-only credentials, API access and image validation.
+- `supabase/migrations/`: schema/RLS/RPCs and seeded dealership group mappings.
+- `tests/`: automated domain/database/security and browser tests with invented CSV/XLSX fixtures.
+
+Client-side protection does not secure backend data by itself. Maintain RLS on every future table and independent server authorization on every messaging/data operation. No service-role or DealerOS/PostX credential may appear in frontend code, a `VITE_` variable, a commit, or a log.

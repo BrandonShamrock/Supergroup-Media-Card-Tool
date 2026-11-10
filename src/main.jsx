@@ -1,41 +1,881 @@
-import React, { useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, CarFront, Users, Send, History, ChevronDown, ArrowUpRight, ArrowRight, Plus, RefreshCw, Upload, Search, Bell, HelpCircle, LogOut, ShieldCheck, FileSpreadsheet, Menu, X, CheckCircle2, Clock3 } from 'lucide-react';
-import './styles.css';
-import { AuthGate } from './Auth';
+import React, { useEffect, useState, lazy, Suspense } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  LayoutDashboard,
+  CarFront,
+  Users,
+  Send,
+  History,
+  Settings,
+  ChevronDown,
+  ArrowRight,
+  Plus,
+  RefreshCw,
+  Search,
+  LogOut,
+  ShieldCheck,
+  Menu,
+  X,
+  CheckCircle2,
+} from "lucide-react";
+import { AuthGate } from "./Auth";
+import { api } from "./api";
+const CustomerUpload = lazy(() => import("./CustomerUpload"));
+const DealershipSettings = lazy(() => import("./DealershipSettings"));
+const CampaignPreview = lazy(() => import("./CampaignPreview"));
+import "./styles.css";
 
-const dealerships = ['Super Group Sandton', 'Super Group Bryanston', 'Super Group Midrand'];
-const vehicles = [
- {id:1,make:'Toyota',model:'Fortuner 2.8 GD-6',year:2023,mileage:'32,450',price:'R 689,900',type:'SUV',colour:'Glacier White'},
- {id:2,make:'Volkswagen',model:'Polo 1.0 TSI Life',year:2024,mileage:'12,800',price:'R 329,900',type:'Hatchback',colour:'Reflex Silver'},
- {id:3,make:'BMW',model:'320i M Sport',year:2022,mileage:'45,200',price:'R 579,900',type:'Sedan',colour:'Mineral Grey'},
- {id:4,make:'Ford',model:'Ranger 2.0 Bi-Turbo',year:2023,mileage:'28,600',price:'R 629,900',type:'Double cab',colour:'Frozen White'},
- {id:5,make:'Mercedes-Benz',model:'C200 Avantgarde',year:2022,mileage:'38,100',price:'R 649,900',type:'Sedan',colour:'Obsidian Black'},
- {id:6,make:'Suzuki',model:'Swift 1.2 GLX',year:2024,mileage:'8,500',price:'R 239,900',type:'Hatchback',colour:'Speedy Blue'},
+const navigation = [
+  { name: "Overview", icon: LayoutDashboard },
+  { name: "Vehicle stock", icon: CarFront },
+  { name: "Client upload", icon: Users },
+  { name: "Campaign preview", icon: Send },
+  { name: "Campaign history", icon: History },
+  { name: "Dealership settings", icon: Settings },
 ];
-const navigation = [{name:'Overview',icon:LayoutDashboard},{name:'Vehicle stock',icon:CarFront},{name:'Client upload',icon:Users},{name:'Campaign preview',icon:Send},{name:'Campaign history',icon:History}];
-const campaigns = [{name:'November favourites',detail:'6 vehicles · Sample audience',date:'06 Nov 2026',status:'Previewed'},{name:'Weekend SUV selection',detail:'4 vehicles · Sample audience',date:'30 Oct 2026',status:'Draft'},{name:'Fresh arrivals',detail:'8 vehicles · Sample audience',date:'24 Oct 2026',status:'Previewed'}];
-function Brand(){return <div className="brand"><div className="brand-symbol">S<span>G</span></div><div><strong>SUPER GROUP</strong><small>MEDIA CARD TOOL</small></div></div>}
-function Button({children,onClick,secondary=false,...props}){return <button className={`button ${secondary?'secondary':''}`} onClick={onClick} {...props}>{children}</button>}
-function Heading({eyebrow,title,description,children}){return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{children}</div>}
-function EmptyNote(){return <div className="safe-note"><ShieldCheck size={17}/> Prototype workspace. All vehicles, dealerships and campaign activity are sample data.</div>}
-function Dashboard({ session, signOut }){
- const [page,setPage]=useState('Overview'),[dealer,setDealer]=useState(dealerships[0]),[selected,setSelected]=useState([]),[query,setQuery]=useState(''),[notice,setNotice]=useState(''),[mobile,setMobile]=useState(false),[file,setFile]=useState('');
- const navigate=(next)=>{setPage(next);setMobile(false);setNotice('');};
- const toggle=(id)=>setSelected(s=>s.includes(id)?s.filter(v=>v!==id):[...s,id]);
- const refresh=()=>setNotice('Sample stock refreshed. Live stock feeds are not connected.');
- const upload=(f)=>{if(!f)return;if(!/\.(xlsx|xls)$/i.test(f.name)){setNotice('Choose an Excel file (.xlsx or .xls).');return;}setFile('Sample Excel file selected');setNotice('Demo selection only. File contents are not read, uploaded or stored.');};
- return <div className="app"><aside className={`sidebar ${mobile?'open':''}`}><Brand/><button className="mobile-close icon-button" aria-label="Close navigation" onClick={()=>setMobile(false)}><X/></button><div className="workspace-label">WORKSPACE</div><nav>{navigation.map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>navigate(name)}><Icon size={19}/>{name}{name==='Vehicle stock'&&<span className="nav-count">6</span>}</button>)}</nav><div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><HelpCircle size={20}/></div><strong>A little help along the way</strong><p>Select stock, add a sample audience and preview your campaign.</p><button onClick={()=>{navigate('Overview');setNotice('Start with Vehicle stock, select vehicles, then open Campaign preview. Client upload is a visual demo only.');}}>View quick guide <ArrowUpRight size={15}/></button></div><div className="sidebar-footer"><span className="status-dot"/> Prototype environment <span>v0.1</span></div></div></aside>
- <div className="main-shell"><header className="topbar"><div className="topbar-location"><button className="icon-button mobile-toggle" aria-label="Open navigation" onClick={()=>setMobile(true)}><Menu/></button><span>Workspace</span><span className="slash">/</span><strong>{page}</strong></div><div className="topbar-actions"><span className="prototype-pill"><span/> Demo mode</span><button className="icon-button notification" aria-label="View notifications" onClick={()=>setNotice('You’re all caught up. There are no live notifications in this prototype.')}><Bell size={19}/><i/></button><div className="user-avatar">{(session.user.email || 'U').slice(0, 1).toUpperCase()}</div><div className="user-name"><strong>{session.user.email || 'Signed-in user'}</strong><small>Authenticated account</small></div><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOut size={18}/></button></div></header>
- <main className="content"><div className="dealer-row"><span><span className="tiny-square"/> DEALERSHIP WORKSPACE</span><label className="dealer-select"><CarFront size={17}/><select aria-label="Select dealership" value={dealer} onChange={e=>{setDealer(e.target.value);setSelected([]);setNotice('Dealership changed. Displaying sample stock for this demo.');}}>{dealerships.map(d=><option key={d}>{d}</option>)}</select><ChevronDown size={15}/></label></div>
- {notice&&<div className="notice" role="status"><CheckCircle2 size={18}/>{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={16}/></button></div>}
- {page==='Overview'&&<><Heading eyebrow="LET’S GET THINGS MOVING" title="Your next campaign starts here." description="Turn your vehicle stock into meaningful customer connections."><Button onClick={()=>navigate('Vehicle stock')}><Plus size={18}/> Create campaign</Button></Heading><div className="stats-grid">{[{label:'Available vehicles',value:'6',note:'Ready for your next campaign',icon:CarFront,tag:'Sample stock'},{label:'Selected vehicles',value:String(selected.length).padStart(2,'0'),note:'Build a selection that stands out',icon:CheckCircle2,tag:'Your selection'},{label:'Client audience',value:'0',note:'Add a sample client spreadsheet',icon:Users,tag:'No upload yet'},{label:'Campaigns previewed',value:'2',note:'Explore your sample activity',icon:Send,tag:'Demo activity'}].map(s=><div className="stat-card" key={s.label}><div className="stat-top"><span>{s.label}</span><div className="stat-icon"><s.icon size={20}/></div></div><div className="stat-value">{s.value}</div><div className="stat-note">{s.note}</div><div className="stat-tag"><span/>{s.tag}</div></div>)}</div>
- <div className="overview-grid"><section className="campaign-guide"><div className="section-kicker">FROM STOCK TO SPOTLIGHT</div><h2>A great campaign.<br/> Three simple steps.</h2><p>Everything you need to prepare your next vehicle campaign, in one place.</p><div className="steps">{[{n:'01',title:'Choose your vehicles',text:'Handpick the stock you want to showcase.',page:'Vehicle stock',icon:CarFront},{n:'02',title:'Add your audience',text:'Try the sample Excel upload experience.',page:'Client upload',icon:Upload},{n:'03',title:'Make it campaign-ready',text:'Review your selection in a campaign preview.',page:'Campaign preview',icon:Send}].map(s=><button className="step" key={s.n} onClick={()=>navigate(s.page)}><span className="step-number">{s.n}</span><div><strong>{s.title}</strong><small>{s.text}</small></div><ArrowRight size={18}/></button>)}</div><div className="guide-foot"><ShieldCheck size={16}/> Preview with confidence. No messages will be sent.</div></section><section className="panel recent-panel"><div className="section-header"><div><h2>Recent campaigns</h2><p>A look at your latest activity</p></div><span className="sample-label">SAMPLE</span></div><div className="recent-list">{campaigns.map((c,i)=><div className="recent-item" key={c.name}><div className={`recent-icon ${i===1?'muted':''}`}><Send size={19}/></div><div className="recent-copy"><strong>{c.name}</strong><small>{c.detail}</small><span>{c.date}</span></div><span className={`badge ${c.status==='Draft'?'draft':''}`}>{c.status}</span></div>)}</div><button className="text-button full" onClick={()=>navigate('Campaign history')}>View campaign history <ArrowRight size={16}/></button><div className="insight"><div className="insight-mark">✦</div><strong>A more focused selection.<br/>A stronger first impression.</strong><p>Choose a mix of vehicles that speaks to your audience.</p></div></section></div>
- <section className="panel stock-preview"><div className="section-header"><div><h2>Fresh from your stock <span className="count-badge">6 vehicles</span></h2><p>Your next campaign could be right here.</p></div><button className="text-button" onClick={()=>navigate('Vehicle stock')}>View all stock <ArrowRight size={16}/></button></div><div className="vehicle-preview-grid">{vehicles.slice(0,3).map(v=><button className="vehicle-preview" key={v.id} onClick={()=>navigate('Vehicle stock')}><img src="/vehicle.svg" alt={`${v.make} ${v.model}, sample illustration`}/><div><span>{v.year} <i>•</i> {v.type}</span><h3>{v.make} {v.model}</h3><small>{v.mileage} km</small><strong>{v.price}</strong></div><ArrowUpRight size={17}/></button>)}</div></section></>}
- {page==='Vehicle stock'&&<><Heading eyebrow="FIND YOUR NEXT FEATURE" title="Vehicle stock" description="Select the vehicles you’d like to include in your campaign."><Button secondary onClick={refresh}><RefreshCw size={17}/> Refresh stock</Button></Heading><div className="panel"><div className="stock-toolbar"><label className="search"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search make or model" aria-label="Search vehicles"/></label><span>{selected.length} vehicles selected</span><Button onClick={()=>navigate('Campaign preview')}>Preview selection <ArrowRight size={16}/></Button></div><div className="table-scroll"><table><thead><tr><th><input type="checkbox" aria-label="Select all vehicles" checked={selected.length===vehicles.length} onChange={e=>setSelected(e.target.checked?vehicles.map(v=>v.id):[])}/></th><th>VEHICLE</th><th>YEAR</th><th>MILEAGE</th><th>PRICE</th><th>AVAILABILITY</th></tr></thead><tbody>{vehicles.filter(v=>`${v.make} ${v.model}`.toLowerCase().includes(query.toLowerCase())).map(v=><tr key={v.id} className={selected.includes(v.id)?'selected-row':''}><td><input type="checkbox" checked={selected.includes(v.id)} onChange={()=>toggle(v.id)} aria-label={`Select ${v.make} ${v.model}`}/></td><td><div className="vehicle-cell"><img src="/vehicle.svg" alt={`${v.make} ${v.model}, sample illustration`}/><div><strong>{v.make}</strong><span>{v.model}</span><small>{v.colour} · {v.type}</small></div></div></td><td>{v.year}</td><td>{v.mileage} km</td><td className="price">{v.price}</td><td><span className="availability"><span/> Available</span></td></tr>)}</tbody></table>{!vehicles.some(v=>`${v.make} ${v.model}`.toLowerCase().includes(query.toLowerCase()))&&<div className="empty-state">No vehicles match your search.</div>}</div><div className="table-footer">6 sample vehicles · Illustrations are representative only<Button secondary onClick={()=>setSelected([])}>Clear selection</Button></div></div></>}
- {page==='Client upload'&&<><Heading eyebrow="BUILD YOUR AUDIENCE" title="Client upload" description="Explore how an Excel client list will fit into your campaign workflow."/><section className="panel upload-panel"><div className="alert"><ShieldCheck size={20}/><div><strong>Sample files only</strong><p>Do not select real client data. This prototype does not read file contents, upload files, retain filenames or save client information.</p></div></div><div className="dropzone" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();upload(e.dataTransfer.files[0]);}}><div className="upload-icon"><Upload size={30}/></div><h2>{file||'Drop a sample Excel file here'}</h2><p>or choose a file from your computer</p><label className="button file-button"><Plus size={17}/> Choose sample file<input type="file" accept=".xlsx,.xls" onChange={e=>{upload(e.target.files[0]);e.target.value='';}}/></label><small>Excel files only · .xlsx or .xls · Visual demo</small></div><div className="upload-info"><FileSpreadsheet size={24}/><div><strong>A simple spreadsheet is all it takes</strong><p>Future client imports may include name and mobile number columns. For now, use invented sample data only.</p></div></div>{file&&<Button secondary onClick={()=>setFile('')}>Clear sample selection</Button>}</section></>}
- {page==='Campaign preview'&&<><Heading eyebrow="GIVE IT A FINAL LOOK" title="Campaign preview" description="Review your selected vehicles before your future campaign workflow."><Button secondary onClick={()=>navigate('Vehicle stock')}>Edit selection</Button></Heading><div className="preview-layout"><section className="panel preview-sheet"><div className="preview-brand"><Brand/><span>YOUR NEXT DRIVE</span></div><h2>A fresh selection. A world of possibility.</h2><p>Discover selected vehicles at {dealer}.</p>{selected.length?<div className="preview-cars">{vehicles.filter(v=>selected.includes(v.id)).map(v=><div key={v.id}><img src="/vehicle.svg" alt="Sample vehicle illustration"/><h3>{v.make} {v.model}</h3><p>{v.year} · {v.mileage} km</p><strong>{v.price}</strong></div>)}</div>:<div className="empty-state"><CarFront size={38}/><h3>Your selection starts with a vehicle</h3><p>Choose some sample stock to bring this preview to life.</p><Button onClick={()=>navigate('Vehicle stock')}>Browse vehicle stock <ArrowRight size={16}/></Button></div>}<small>Sample campaign · Vehicle illustrations and pricing are for demonstration only.</small></section><section className="panel campaign-details"><h2>Campaign details</h2><dl><dt>Dealership</dt><dd>{dealer}</dd><dt>Selected vehicles</dt><dd>{selected.length}</dd><dt>Audience</dt><dd>No real client data</dd><dt>Status</dt><dd><span className="badge draft">Prototype draft</span></dd></dl><div className="alert">Preview only. Message sending and all external integrations are disabled.</div><Button disabled><Send size={16}/> Sending unavailable</Button></section></div></>}
- {page==='Campaign history'&&<><Heading eyebrow="YOUR CAMPAIGN WORKSPACE" title="Campaign history" description="Explore sample campaign activity. No messages have been sent."/><div className="panel"><div className="section-header"><h2>Sample campaigns</h2><span className="sample-label">DEMO DATA</span></div><div className="table-scroll"><table><thead><tr><th>CAMPAIGN</th><th>DATE</th><th>STATUS</th><th>DELIVERY</th></tr></thead><tbody>{campaigns.map(c=><tr key={c.name}><td><strong>{c.name}</strong><small className="table-sub">{c.detail}</small></td><td>{c.date}</td><td><span className={`badge ${c.status==='Draft'?'draft':''}`}>{c.status}</span></td><td><span className="not-sent"><Clock3 size={15}/> Not sent</span></td></tr>)}</tbody></table></div></div></>}
- <EmptyNote/><footer className="page-footer"><span>© 2026 Super Group · Media Card Tool</span><span>Built for better connections.</span></footer></main></div></div>;
+function Brand() {
+  return (
+    <div className="brand">
+      <div className="brand-symbol">
+        S<span>G</span>
+      </div>
+      <div>
+        <strong>SUPER GROUP</strong>
+        <small>MEDIA CARD TOOL</small>
+      </div>
+    </div>
+  );
 }
-createRoot(document.getElementById('root')).render(<React.StrictMode><AuthGate Brand={Brand}>{(session, signOut) => <Dashboard key={session.user.id} session={session} signOut={signOut}/>}</AuthGate></React.StrictMode>);
+function Button({ children, secondary = false, ...props }) {
+  return (
+    <button className={`button ${secondary ? "secondary" : ""}`} {...props}>
+      {children}
+    </button>
+  );
+}
+function Heading({ eyebrow, title, description, children }) {
+  return (
+    <div className="page-heading">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+const money = (v) =>
+  Number(v).toLocaleString("en-ZA", {
+    style: "currency",
+    currency: "ZAR",
+    maximumFractionDigits: 0,
+  });
+const date = (v) =>
+  v
+    ? new Date(v).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })
+    : "Never";
+function Dashboard({ session, signOut }) {
+  const [page, setPage] = useState("Overview"),
+    [data, setData] = useState({
+      dealerships: [],
+      vehicles: [],
+      campaigns: [],
+      sync: {},
+      sending: { enabled: false },
+    }),
+    [dealer, setDealer] = useState(""),
+    [selected, setSelected] = useState([]),
+    [failedImages, setFailedImages] = useState([]),
+    [query, setQuery] = useState(""),
+    [notice, setNotice] = useState(""),
+    [error, setError] = useState(""),
+    [mobile, setMobile] = useState(false),
+    [loading, setLoading] = useState(true),
+    [refreshing, setRefreshing] = useState(false),
+    [audience, setAudience] = useState(null),
+    [details, setDetails] = useState(null);
+  const load = async () => {
+    const result = await api("dashboard");
+    setData(result);
+    setFailedImages([]);
+    setDealer((current) =>
+      result.dealerships.some((d) => d.id === current)
+        ? current
+        : result.dealerships[0]?.id || "",
+    );
+    setSelected((current) =>
+      current.filter((id) =>
+        result.vehicles.some((v) => v.source_id === id && v.primary_image_url),
+      ),
+    );
+  };
+  useEffect(() => {
+    let active = true;
+    api("dashboard")
+      .then((r) => {
+        if (active) {
+          setData(r);
+          setDealer(r.dealerships[0]?.id || "");
+        }
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (page !== "Campaign history") return;
+    const timer = setInterval(() => {
+      load().catch((e) => setError(e.message));
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [page]);
+  const config = data.dealerships.find((d) => d.id === dealer);
+  const vehicles = data.vehicles.filter(
+    (v) => v.dealership_id === config?.dealeros_id,
+  );
+  const chosen = selected
+    .map((id) => vehicles.find((v) => v.source_id === id))
+    .filter(Boolean);
+  const navigate = (next) => {
+    setPage(next);
+    setMobile(false);
+    setNotice("");
+    setDetails(null);
+  };
+  const toggle = (id) =>
+    setSelected((s) =>
+      s.includes(id) ? s.filter((v) => v !== id) : [...s, id],
+    );
+  const refresh = async () => {
+    setRefreshing(true);
+    setError("");
+    try {
+      const r = await api("refresh", {});
+      await load();
+      setNotice(`Stock synchronized: ${r.count} vehicles.`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const save = async (form) => {
+    await api("settings", form);
+    await load();
+    setSelected([]);
+    setNotice("Dealership configuration saved.");
+  };
+  const cancel = async (id) => {
+    if (
+      !window.confirm(
+        "Cancel pending batches? Any in-flight submission may still finish and cannot be recalled.",
+      )
+    )
+      return;
+    try {
+      await api("cancel", { id });
+      await load();
+      setNotice(
+        "Pending batches cancelled. In-flight submissions may still finish.",
+      );
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const inspect = async (id) => {
+    try {
+      setDetails(await api(`details&id=${encodeURIComponent(id)}`));
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const nextReady =
+    config?.active &&
+    config?.mapping_verified &&
+    config?.template_verified &&
+    chosen.length === config?.card_count;
+  return (
+    <div className="app">
+      <aside className={`sidebar ${mobile ? "open" : ""}`}>
+        <Brand />
+        <button
+          className="mobile-close icon-button"
+          aria-label="Close navigation"
+          onClick={() => setMobile(false)}
+        >
+          <X />
+        </button>
+        <div className="workspace-label">WORKSPACE</div>
+        <nav>
+          {navigation.map(({ name, icon: Icon }) => (
+            <button
+              key={name}
+              className={page === name ? "active" : ""}
+              onClick={() => navigate(name)}
+            >
+              <Icon size={19} />
+              {name}
+              {name === "Vehicle stock" && (
+                <span className="nav-count">{vehicles.length}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="help-card">
+            <ShieldCheck size={20} />
+            <strong> A considered connection</strong>
+            <p>
+              Verify your mapping, approved template and audience consent before
+              submitting a campaign.
+            </p>
+            <button onClick={() => navigate("Dealership settings")}>
+              Manage dealership settings <ArrowRight size={15} />
+            </button>
+          </div>
+          <div className="sidebar-footer">
+            <span className="status-dot" />
+            {data.sending.enabled
+              ? "Live sending enabled"
+              : "Live sending disabled"}
+          </div>
+        </div>
+      </aside>
+      <div className="main-shell">
+        <header className="topbar">
+          <div className="topbar-location">
+            <button
+              className="icon-button mobile-toggle"
+              aria-label="Open navigation"
+              onClick={() => setMobile(true)}
+            >
+              <Menu />
+            </button>
+            <span>Workspace</span>
+            <span className="slash">/</span>
+            <strong>{page}</strong>
+          </div>
+          <div className="topbar-actions">
+            <span className="prototype-pill">
+              {data.sending.enabled ? "Live workflow" : "Sending disabled"}
+            </span>
+            <div className="user-avatar">
+              {(session.user.email || "U").slice(0, 1).toUpperCase()}
+            </div>
+            <div className="user-name">
+              <strong>{session.user.email || "Signed-in user"}</strong>
+              <small>Authenticated account</small>
+            </div>
+            <button
+              className="icon-button"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={signOut}
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </header>
+        <main className="content">
+          <div className="dealer-row">
+            <span>
+              <span className="tiny-square" /> DEALERSHIP WORKSPACE
+            </span>
+            <label className="dealer-select">
+              <CarFront size={17} />
+              <select
+                aria-label="Select dealership"
+                value={dealer}
+                onChange={(e) => {
+                  setDealer(e.target.value);
+                  setSelected([]);
+                  setDetails(null);
+                }}
+              >
+                <option disabled value="">
+                  No dealership configured
+                </option>
+                {data.dealerships.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                    {!d.active ? " (inactive)" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={15} />
+            </label>
+          </div>
+          {loading && <p role="status">Loading your workspace…</p>}
+          {error && (
+            <div className="notice form-error" role="alert">
+              {error}
+              <button aria-label="Dismiss error" onClick={() => setError("")}>
+                <X size={16} />
+              </button>
+              <Button
+                secondary
+                onClick={() => {
+                  load()
+                    .then(() => setError(""))
+                    .catch((e) => setError(e.message));
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+          {notice && (
+            <div className="notice" role="status">
+              <CheckCircle2 size={18} />
+              {notice}
+              <button
+                aria-label="Dismiss notification"
+                onClick={() => setNotice("")}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {page === "Overview" && (
+            <>
+              <Heading
+                eyebrow="LET’S GET THINGS MOVING"
+                title="Your next campaign starts here."
+                description="Turn your vehicle stock into meaningful customer connections."
+              >
+                <Button onClick={() => navigate("Vehicle stock")}>
+                  <Plus size={18} /> Create campaign
+                </Button>
+              </Heading>
+              <div className="stats-grid">
+                {[
+                  {
+                    label: "Available vehicles",
+                    value: vehicles.length,
+                    note: config?.name || "Select a dealership",
+                    icon: CarFront,
+                  },
+                  {
+                    label: "Selected vehicles",
+                    value: chosen.length,
+                    note: `${config?.card_count || "—"} required by template`,
+                    icon: CheckCircle2,
+                  },
+                  {
+                    label: "Client audience",
+                    value: audience?.recipients.length || 0,
+                    note: "Validated recipients in this session",
+                    icon: Users,
+                  },
+                  {
+                    label: "Campaigns",
+                    value: data.campaigns.length,
+                    note: "Most recent 100 campaigns",
+                    icon: Send,
+                  },
+                ].map((s) => (
+                  <div className="stat-card" key={s.label}>
+                    <div className="stat-top">
+                      <span>{s.label}</span>
+                      <div className="stat-icon">
+                        <s.icon size={20} />
+                      </div>
+                    </div>
+                    <div className="stat-value">{s.value}</div>
+                    <div className="stat-note">{s.note}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="overview-grid">
+                <section className="campaign-guide">
+                  <div className="section-kicker">FROM STOCK TO SPOTLIGHT</div>
+                  <h2>
+                    A great campaign.
+                    <br /> Three simple steps.
+                  </h2>
+                  <p>Prepare a considered selection for your customers.</p>
+                  <div className="steps">
+                    {[
+                      {
+                        n: "01",
+                        title: "Choose your vehicles",
+                        text: "Select fresh stock for your dealership.",
+                        page: "Vehicle stock",
+                      },
+                      {
+                        n: "02",
+                        title: "Add your audience",
+                        text: "Import and validate your customer spreadsheet.",
+                        page: "Client upload",
+                      },
+                      {
+                        n: "03",
+                        title: "Review and confirm",
+                        text: "Check cards, audience and template before queuing.",
+                        page: "Campaign preview",
+                      },
+                    ].map((s) => (
+                      <button
+                        className="step"
+                        key={s.n}
+                        onClick={() => navigate(s.page)}
+                      >
+                        <span className="step-number">{s.n}</span>
+                        <div>
+                          <strong>{s.title}</strong>
+                          <small>{s.text}</small>
+                        </div>
+                        <ArrowRight size={18} />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="guide-foot">
+                    <ShieldCheck size={16} /> Server validation protects every
+                    submission.
+                  </div>
+                </section>
+                <section className="panel recent-panel">
+                  <div className="section-header">
+                    <div>
+                      <h2>Recent campaigns</h2>
+                      <p>Actual submission activity</p>
+                    </div>
+                  </div>
+                  <div className="recent-list">
+                    {data.campaigns.slice(0, 3).map((c) => (
+                      <div className="recent-item" key={c.id}>
+                        <div className="recent-icon">
+                          <Send size={19} />
+                        </div>
+                        <div className="recent-copy">
+                          <strong>{c.name}</strong>
+                          <small>
+                            {c.recipient_count} recipients ·{" "}
+                            {date(c.created_at)}
+                          </small>
+                          <span>
+                            {c.accepted_count} accepted · {c.unknown_count}{" "}
+                            unknown
+                          </span>
+                        </div>
+                        <span className="badge">{c.status}</span>
+                      </div>
+                    ))}
+                    {!data.campaigns.length && (
+                      <p className="empty-state">
+                        No campaigns yet. Prepare a selection to get started.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    className="text-button full"
+                    onClick={() => navigate("Campaign history")}
+                  >
+                    View campaign history <ArrowRight size={16} />
+                  </button>
+                </section>
+              </div>
+              <section className="panel">
+                <div className="section-header">
+                  <div>
+                    <h2>Stock synchronization</h2>
+                    <p>
+                      Last successful refresh: {date(data.sync.last_success_at)}{" "}
+                      · {data.sync.vehicle_count || 0} total vehicles
+                    </p>
+                  </div>
+                  <Button secondary disabled={refreshing} onClick={refresh}>
+                    <RefreshCw size={16} />
+                    {refreshing ? "Refreshing…" : "Refresh stock"}
+                  </Button>
+                </div>
+                {data.sync.error && (
+                  <p className="form-error padded">{data.sync.error}</p>
+                )}
+              </section>
+            </>
+          )}
+          {page === "Vehicle stock" && (
+            <>
+              <Heading
+                eyebrow="FIND YOUR NEXT FEATURE"
+                title="Vehicle stock"
+                description="Select vehicles in the order you want them to appear in the carousel."
+              >
+                <Button
+                  secondary
+                  disabled={
+                    refreshing || new Date(data.sync.lease_until) > new Date()
+                  }
+                  onClick={refresh}
+                >
+                  <RefreshCw size={17} />
+                  {refreshing ? "Refreshing…" : "Refresh stock"}
+                </Button>
+              </Heading>
+              <p className="stock-status">
+                Last refresh: {date(data.sync.last_success_at)} ·{" "}
+                {data.sync.vehicle_count || 0} vehicles across all dealerships
+                {data.sync.lease_until &&
+                new Date(data.sync.lease_until) > new Date()
+                  ? " · Synchronization running"
+                  : ""}
+              </p>
+              {data.sync.error && (
+                <div className="alert">{data.sync.error}</div>
+              )}
+              {!config?.dealeros_id && (
+                <div className="alert">
+                  Map this dealership to the actual DealerOS feed in Dealership
+                  Settings.
+                </div>
+              )}
+              <div className="panel">
+                <div className="stock-toolbar">
+                  <label className="search">
+                    <Search size={18} />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search make, model or stock number"
+                      aria-label="Search vehicles"
+                    />
+                  </label>
+                  <span>
+                    {chosen.length} selected · {config?.card_count || "—"}{" "}
+                    required
+                  </span>
+                  <Button
+                    disabled={!nextReady}
+                    onClick={() => navigate("Campaign preview")}
+                  >
+                    Preview selection <ArrowRight size={16} />
+                  </Button>
+                </div>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>SELECT / ORDER</th>
+                        <th>VEHICLE</th>
+                        <th>YEAR</th>
+                        <th>MILEAGE</th>
+                        <th>PRICE</th>
+                        <th>CONDITION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehicles
+                        .filter((v) =>
+                          [v.make, v.model, v.derivative, v.stock_number]
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(query.toLowerCase()),
+                        )
+                        .map((v) => (
+                          <tr
+                            key={v.source_id}
+                            className={
+                              selected.includes(v.source_id)
+                                ? "selected-row"
+                                : ""
+                            }
+                          >
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={selected.includes(v.source_id)}
+                                disabled={
+                                  !v.primary_image_url ||
+                                  failedImages.includes(v.primary_image_url) ||
+                                  (!selected.includes(v.source_id) &&
+                                    chosen.length >= (config?.card_count || 10))
+                                }
+                                onChange={() => toggle(v.source_id)}
+                                aria-label={`Select ${v.make} ${v.model}`}
+                              />
+                              {selected.includes(v.source_id) && (
+                                <span>
+                                  {" "}
+                                  #{selected.indexOf(v.source_id) + 1}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="vehicle-cell">
+                                {v.primary_image_url &&
+                                !failedImages.includes(v.primary_image_url) ? (
+                                  <img
+                                    src={v.primary_image_url}
+                                    onError={() => {
+                                      setFailedImages((current) => [
+                                        ...new Set([
+                                          ...current,
+                                          v.primary_image_url,
+                                        ]),
+                                      ]);
+                                      setSelected((current) =>
+                                        current.filter(
+                                          (id) => id !== v.source_id,
+                                        ),
+                                      );
+                                    }}
+                                    referrerPolicy="no-referrer"
+                                    alt={`${v.make} ${v.model}`}
+                                  />
+                                ) : (
+                                  <span className="form-error">
+                                    Primary image unavailable
+                                  </span>
+                                )}
+                                <div>
+                                  <strong>
+                                    {v.make} {v.model}
+                                  </strong>
+                                  <span>{v.derivative}</span>
+                                  <small>
+                                    {v.stock_number} · {v.colour}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+                            <td>{v.year}</td>
+                            <td>{Number(v.mileage).toLocaleString()} km</td>
+                            <td className="price">{money(v.retail_price)}</td>
+                            <td>{v.new_used}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {!vehicles.length && (
+                    <div className="empty-state">
+                      No stock for this dealership. Refresh the feed and verify
+                      the dealership mapping.
+                    </div>
+                  )}
+                </div>
+                <div className="table-footer">
+                  Primary order-1 images only. Media is revalidated before
+                  sending.
+                  <Button secondary onClick={() => setSelected([])}>
+                    Clear selection
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+          {page === "Client upload" && (
+            <>
+              <Heading
+                eyebrow="BUILD YOUR AUDIENCE"
+                title="Client upload"
+                description="Map spreadsheet columns, validate numbers and review recipients."
+              />
+              <CustomerUpload result={audience} onChange={setAudience} />
+            </>
+          )}
+          {page === "Dealership settings" && (
+            <>
+              <Heading
+                eyebrow="CONNECT YOUR WORKSPACE"
+                title="Dealership settings"
+                description="Manage and manually verify DealerOS and PostX configuration."
+              />
+              {config ? (
+                <DealershipSettings
+                  key={JSON.stringify(config)}
+                  config={config}
+                  vehicles={data.vehicles}
+                  onSave={save}
+                />
+              ) : (
+                <div className="panel empty-state">
+                  Apply the dealership seed migration to configure your
+                  workspace.
+                </div>
+              )}
+            </>
+          )}
+          {page === "Campaign preview" && (
+            <>
+              <Heading
+                eyebrow="GIVE IT A FINAL LOOK"
+                title="Campaign preview"
+                description="Review your WhatsApp carousel and confirm before contacting customers."
+              >
+                <Button secondary onClick={() => navigate("Vehicle stock")}>
+                  Edit selection
+                </Button>
+              </Heading>
+              <CampaignPreview
+                config={config}
+                vehicles={chosen}
+                recipients={audience?.recipients || []}
+                sending={data.sending}
+                onQueued={async (id) => {
+                  setAudience(null);
+                  setSelected([]);
+                  navigate("Campaign history");
+                  setNotice(
+                    `Campaign ${id} queued. You may close the browser; the scheduled worker processes batches.`,
+                  );
+                  try {
+                    await load();
+                  } catch (e) {
+                    setError(e.message);
+                  }
+                }}
+              />
+            </>
+          )}
+          {page === "Campaign history" && (
+            <>
+              <Heading
+                eyebrow="YOUR CAMPAIGN WORKSPACE"
+                title="Campaign history"
+                description="Submission outcomes, not delivery or engagement metrics. Updates every 15 seconds."
+              />
+              <div className="panel table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      {[
+                        "CAMPAIGN",
+                        "DEALERSHIP",
+                        "CREATED",
+                        "VEHICLES",
+                        "RECIPIENTS",
+                        "STATUS",
+                        "ACCEPTED",
+                        "FAILED",
+                        "UNKNOWN",
+                        "DETAILS",
+                      ].map((h) => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.campaigns.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <strong>{c.name}</strong>
+                        </td>
+                        <td>{c.config_snapshot.name}</td>
+                        <td>{date(c.created_at)}</td>
+                        <td>{c.vehicle_count}</td>
+                        <td>{c.recipient_count}</td>
+                        <td>
+                          <span className="badge">{c.status}</span>
+                        </td>
+                        <td>{c.accepted_count}</td>
+                        <td>{c.failed_count}</td>
+                        <td>{c.unknown_count}</td>
+                        <td>
+                          <button
+                            className="text-button"
+                            onClick={() => inspect(c.id)}
+                          >
+                            Inspect
+                          </button>
+                          {["queued", "processing"].includes(c.status) && (
+                            <button
+                              className="text-button"
+                              onClick={() => cancel(c.id)}
+                            >
+                              Cancel pending
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!data.campaigns.length && (
+                  <p className="empty-state">No campaign submissions yet.</p>
+                )}
+              </div>
+              {details && (
+                <section className="panel settings-panel">
+                  <h2>Campaign details</h2>
+                  <p>
+                    {details.snapshot.vehicles
+                      .map((v) => `${v.make} ${v.model} (${v.year})`)
+                      .join(" · ")}
+                  </p>
+                  {details.batches.map((b) => (
+                    <details key={b.id}>
+                      <summary>
+                        Batch {b.position + 1} · {b.status} ·{" "}
+                        {b.recipient_count} recipients
+                      </summary>
+                      <p>
+                        Started {date(b.started_at)} · Finished{" "}
+                        {date(b.finished_at)}
+                      </p>
+                      {b.error && <p className="form-error">{b.error}</p>}
+                      {!b.recipient_results.length && (
+                        <p>
+                          Correlation references:{" "}
+                          {b.recipient_references.join(", ")}
+                        </p>
+                      )}
+                      <ul>
+                        {b.recipient_results.map((r) => (
+                          <li key={r.external_reference}>
+                            {r.external_reference}: {r.status}
+                            {r.conversation_id
+                              ? ` · conversation ${r.conversation_id}`
+                              : ""}
+                            {r.error ? ` · ${r.error}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ))}
+                  <p>
+                    Unknown outcomes require reconciliation in PostX using
+                    external references. There is no automatic retry.
+                  </p>
+                </section>
+              )}
+            </>
+          )}
+          <div className="safe-note">
+            <ShieldCheck size={17} /> Only contact customers with the
+            appropriate consent. Queued recipients are private and cleared after
+            processing.
+          </div>
+          <footer className="page-footer">
+            <span>© 2026 Super Group · Media Card Tool</span>
+            <span>Built for better connections.</span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
+}
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <Suspense
+      fallback={<main className="auth-loading">Loading workspace…</main>}
+    >
+      <AuthGate Brand={Brand}>
+        {(session, signOut) => (
+          <Dashboard
+            key={session.user.id}
+            session={session}
+            signOut={signOut}
+          />
+        )}
+      </AuthGate>
+    </Suspense>
+  </React.StrictMode>,
+);
