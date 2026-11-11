@@ -1,7 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID } from "node:crypto";
 import {
-  parseStock,
   invariant,
   buildPayload,
   splitBatches,
@@ -79,62 +77,7 @@ export async function readInput(request) {
     throw inputError("Invalid JSON input.");
   }
 }
-export async function feed(signal, strategy) {
-  invariant(
-    process.env.STOCK_API_BEARER_TOKEN,
-    "DealerOS server credential is missing.",
-  );
-  const r = await fetch(
-    "https://api.dealeros.co.za/api/listings/list?with=listingImages",
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.STOCK_API_BEARER_TOKEN}`,
-      },
-      redirect: "error",
-      signal,
-    },
-  );
-  invariant(r.ok, "DealerOS stock request failed.");
-  const text = await r.text();
-  invariant(
-    Buffer.byteLength(text) <= 20 * 1024 * 1024,
-    "Stock response exceeds supported size.",
-  );
-  return parseStock(JSON.parse(text), strategy);
-}
-export async function refresh(client) {
-  const lease = randomUUID();
-  const state = await checked(
-    client.rpc("acquire_stock_sync", { p_lease: lease }),
-  );
-  try {
-    const parsed = await feed(AbortSignal.timeout(15000), state.key_strategy);
-    const result = await client.rpc("apply_stock_sync", {
-      p_lease: lease,
-      p_strategy: parsed.strategy,
-      p_vehicles: parsed.vehicles,
-    });
-    if (result.error)
-      throw new Error(
-        "Stock validation or synchronization safeguards blocked this refresh.",
-      );
-    return { count: parsed.vehicles.length };
-  } catch {
-    await client
-      .from("stock_sync")
-      .update({
-        lease: null,
-        lease_until: null,
-        error:
-          "Refresh failed validation, upstream access, or size safeguards. Existing stock retained.",
-      })
-      .eq("id", true)
-      .eq("lease", lease);
-    throw inputError(
-      "Refresh failed. Existing stock retained. Investigate feed shape, access, identifiers and any reduction greater than 20% before retrying.",
-    );
-  }
-}
+export { feed } from "./dealeros.js";
 export function sendingSettings() {
   const verifiedLimit = Number(process.env.POSTX_VERIFIED_BATCH_LIMIT || 0);
   const batchSize = Number(process.env.POSTX_BATCH_SIZE || 0);

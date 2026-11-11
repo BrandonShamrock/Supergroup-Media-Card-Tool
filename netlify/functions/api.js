@@ -7,12 +7,14 @@ import {
   readInput,
   inputError,
   safeMessage,
-  refresh,
   sendingSettings,
   allRows,
   prepare,
   feed,
 } from "./lib/core.js";
+import { stockPage } from "./lib/stock-read.js";
+import { requestStockRefresh } from "./lib/stock-refresh.js";
+import { StockError } from "./lib/dealeros.js";
 import { verifyImage } from "./lib/media.js";
 import { invariant, splitBatches, buildPayload } from "../../shared/domain.js";
 
@@ -22,16 +24,9 @@ export default async function handler(request) {
       user = await authorize(request, client);
     const action = new URL(request.url).searchParams.get("action");
     if (request.method === "GET" && action === "dashboard") {
-      const [dealerships, vehicles, sync, campaigns] = await Promise.all([
+      const [dealerships, sync, campaigns] = await Promise.all([
         allRows(client, "dealerships"),
-        allRows(client, "vehicle_stock"),
-        checked(
-          client
-            .from("stock_sync")
-            .select("last_success_at,vehicle_count,error,lease_until")
-            .eq("id", true)
-            .single(),
-        ),
+        checked(client.rpc("stock_sync_status")),
         checked(
           client
             .from("campaigns")
@@ -42,12 +37,22 @@ export default async function handler(request) {
       ]);
       return json({
         dealerships,
-        vehicles,
+        vehicles: [],
+        stock_paginated: true,
         sync,
         campaigns,
         sending: sendingSettings(),
       });
     }
+    if (request.method === "GET" && action === "stock-status")
+      return json({ sync: await checked(client.rpc("stock_sync_status")) });
+    if (request.method === "GET" && action === "stock-page")
+      return json(
+        await stockPage(
+          client,
+          new URL(request.url).searchParams.get("cursor"),
+        ),
+      );
     if (request.method === "GET" && action === "details") {
       const id = new URL(request.url).searchParams.get("id");
       const [snapshot, batches] = await Promise.all([
@@ -72,7 +77,15 @@ export default async function handler(request) {
     }
     if (request.method !== "POST")
       return json({ error: "Unsupported operation." }, 405);
-    if (action === "refresh") return json(await refresh(client));
+    if (action === "refresh")
+      return json(
+        await requestStockRefresh({
+          client,
+          user,
+          authorization: request.headers.get("authorization"),
+        }),
+        202,
+      );
     const body = await readInput(request);
     if (action === "cancel") {
       invariant(
@@ -281,6 +294,8 @@ export default async function handler(request) {
     }
     return json({ error: "Unknown operation." }, 404);
   } catch (e) {
+    if (e instanceof StockError)
+      return json({ error: e.message, code: e.code }, 400);
     return json({ error: safeMessage(e) }, e.status || 400);
   }
 }

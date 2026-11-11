@@ -20,6 +20,25 @@ export async function api(action, body) {
       "Backend unavailable. Use Netlify Dev or a configured Netlify deployment.",
     );
   }
-  if (!response.ok) throw new Error(result.error || "Request failed.");
+  if (!response.ok)
+    throw new Error(
+      [result.code, result.error || "Request failed."]
+        .filter(Boolean)
+        .join(": "),
+    );
+  if (action === "dashboard" && result.stock_paginated) {
+    const vehicles = [];
+    let cursor = null;
+    do {
+      const page = await api(
+        "stock-page" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
+      );
+      vehicles.push(...page.vehicles);
+      if (page.next_cursor && page.next_cursor === cursor)
+        throw new Error("Stock pagination did not advance. Retry refresh.");
+      cursor = page.next_cursor;
+    } while (cursor);
+    result.vehicles = vehicles;
+  }
   return result;
 }

@@ -1,3 +1,18 @@
+# Latest stock-refresh fix validation
+
+This release adds `202611110001_background_stock_refresh.sql` and an authenticated Netlify Background Function. Validation for this release:
+
+- Clean `npm ci` and `npm run build`.
+- `CHROMIUM_PATH=/usr/bin/chromium npm test`: 39 passing tests (26 unit/database/security/worker tests, 13 browser tests).
+- Real 31 MiB streamed fixture accepted; only normalized stock retained. Simulated 45-second upstream latency succeeds using a virtual clock, with no real API call or 45-second sleep.
+- Oversized/aborted streams, HTTP/network/JSON/validation errors, safe logging, database guard failure, duplicate dispatch/claim, stale leases, status timeouts and bounded stock pagination covered.
+- All three migrations executed against PostgreSQL/PGlite; atomic rollback, no stock deletion on failure, single-claim jobs, terminal success and old-worker failure guards checked.
+- Foreground, background and unchanged campaign worker bundles compile/import with Node ESM.
+- No live DealerOS/Supabase refresh, production Netlify account limits/memory profile, migration application or deployment claimed. Background Functions availability was confirmed by the owner. The exact synchronous account override could not be inspected; official Netlify CLI 27.17.0 reports a site-specific lookup/default 30-second sync timeout and 900-second background timeout. See [limit investigation/deployment details](STOCK_REFRESH.md).
+- PostX sending configuration, worker code, budgets and activation remain unchanged. No real messages sent.
+
+The previous implementation's validation record follows for context; its 26-test total is superseded by the current 39-test release.
+
 # Implementation validation
 
 Validated locally on the integration feature branch:

@@ -249,15 +249,13 @@ test("CSV and XLSX import validate audiences and keep live submission disabled",
   await page
     .getByRole("button", { name: "Client upload", exact: true })
     .click();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "invented.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        "Customer name,WhatsApp number\nInvented Customer,0821234567\nDuplicate,+27821234567\n,123",
-      ),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "invented.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "Customer name,WhatsApp number\nInvented Customer,0821234567\nDuplicate,+27821234567\n,123",
+    ),
+  });
   await page.getByRole("button", { name: "Validate recipients" }).click();
   await expect(
     page.getByRole("heading", {
@@ -322,3 +320,98 @@ test("dealership settings show verified configuration, candidate guidance and ed
     page.getByLabel("Case-sensitive template variable mappings (JSON)"),
   ).toContainText("car_type");
 });
+
+for (const outcome of ["succeeded", "failed", "immediate"])
+  test(`background stock refresh polls for ${outcome} rather than treating 202 as success`, async ({
+    page,
+  }) => {
+    await mockAuth(page);
+    const id = "33333333-3333-4333-8333-333333333333";
+    let status = "idle",
+      polls = 0,
+      pages = 0;
+    const sync = () => ({
+      status,
+      job_id: id,
+      phase: status === "running" ? "fetching" : status,
+      vehicle_count: 2,
+      ...(status === "failed"
+        ? {
+            error_code: "UPSTREAM_TIMEOUT",
+            error: "DealerOS fetch/download exceeded its time budget.",
+          }
+        : {}),
+    });
+    await page.route("**/.netlify/functions/api?**", async (route) => {
+      const url = new URL(route.request().url()),
+        action = url.searchParams.get("action");
+      if (action === "dashboard")
+        return route.fulfill({
+          json: {
+            dealerships: [dealership],
+            vehicles: [],
+            stock_paginated: true,
+            campaigns: [],
+            sync: sync(),
+            sending: { enabled: false },
+          },
+        });
+      if (action === "stock-page") {
+        pages++;
+        const cursor = url.searchParams.get("cursor");
+        return route.fulfill({
+          json: {
+            vehicles: cursor ? [inventory[1]] : [inventory[0]],
+            next_cursor: cursor ? null : inventory[0].source_id,
+          },
+        });
+      }
+      if (action === "refresh") {
+        status = "queued";
+        return route.fulfill({
+          status: 202,
+          json: { job_id: id, queued: true },
+        });
+      }
+      if (action === "stock-status") {
+        polls++;
+        status =
+          outcome === "immediate"
+            ? "succeeded"
+            : polls < 2
+              ? "running"
+              : outcome;
+        return route.fulfill({ json: { sync: sync() } });
+      }
+      return route.fulfill({
+        status: 400,
+        json: { error: "Unexpected test operation" },
+      });
+    });
+    await page.goto("/");
+    await login(page);
+    await page
+      .getByRole("button", { name: "Refresh stock", exact: true })
+      .click();
+    if (outcome !== "immediate") {
+      await expect(
+        page.getByRole("status").filter({ hasText: "Stock refresh running" }),
+      ).toBeVisible();
+      await expect(page.getByText(/Stock synchronized:/)).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Refreshing…", exact: true }),
+      ).toBeDisabled();
+    }
+    if (outcome !== "failed")
+      await expect(
+        page.getByText("Stock synchronized: 2 vehicles. Job " + id + "."),
+      ).toBeVisible({ timeout: 10000 });
+    else
+      await expect(
+        page.getByRole("alert").filter({ hasText: "UPSTREAM_TIMEOUT" }).first(),
+      ).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByRole("button", { name: "Refresh stock", exact: true }),
+    ).toBeEnabled();
+    expect(pages).toBeGreaterThanOrEqual(outcome !== "failed" ? 4 : 2);
+  });
