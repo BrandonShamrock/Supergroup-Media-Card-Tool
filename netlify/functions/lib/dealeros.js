@@ -1,5 +1,8 @@
+import { networkErrorDetails, redirectDetails } from "./network-errors.js";
 import { parseStock } from "../../../shared/domain.js";
 
+export const DEALEROS_URL =
+  "https://api.dealeros.co.za/api/listings/list?with=listingImages";
 export const MAX_FEED_BYTES = 64 * 1024 * 1024;
 // Used only by the background refresh. Other callers retain their existing budgets.
 export const REFRESH_FETCH_TIMEOUT_MS = 180_000;
@@ -68,14 +71,22 @@ export async function feed(
     );
   let bytes = 0;
   try {
-    const response = await request(
-      "https://api.dealeros.co.za/api/listings/list?with=listingImages",
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        redirect: "error",
-        signal,
-      },
-    );
+    const response = await request(DEALEROS_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+      redirect: "manual",
+      signal,
+    });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel().catch(() => {});
+      throw new StockError(
+        "UPSTREAM_REDIRECT",
+        "DealerOS returned a redirect; it was not followed.",
+        {
+          http_status: response.status,
+          ...redirectDetails(response, DEALEROS_URL),
+        },
+      );
+    }
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
       throw new StockError(
@@ -123,16 +134,27 @@ export async function feed(
     return parsed;
   } catch (error) {
     if (error instanceof StockError) throw error;
-    if (signal?.aborted)
-      throw new StockError(
-        "UPSTREAM_TIMEOUT",
-        "DealerOS fetch/download exceeded its time budget.",
-        { bytes },
-      );
+    const details = {
+      bytes,
+      ...networkErrorDetails(error, { timedOut: signal?.aborted }),
+    };
+    const kind = details.network_class;
+    const code =
+      signal?.aborted || kind === "TIMEOUT"
+        ? "UPSTREAM_TIMEOUT"
+        : kind === "DNS"
+          ? "UPSTREAM_DNS"
+          : kind === "TLS"
+            ? "UPSTREAM_TLS"
+            : kind === "TCP"
+              ? "UPSTREAM_TCP"
+              : "UPSTREAM_NETWORK";
     throw new StockError(
-      "UPSTREAM_NETWORK",
-      "DealerOS connection or response stream failed.",
-      { bytes },
+      code,
+      code === "UPSTREAM_TIMEOUT"
+        ? "DealerOS fetch/download exceeded its time budget."
+        : `DealerOS connection or response stream failed (${kind}).`,
+      details,
     );
   }
 }

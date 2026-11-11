@@ -415,3 +415,29 @@ for (const outcome of ["succeeded", "failed", "immediate"])
     ).toBeEnabled();
     expect(pages).toBeGreaterThanOrEqual(outcome !== "failed" ? 4 : 2);
   });
+
+test("authorized stock page can queue a connectivity diagnostic without claiming connectivity success", async ({
+  page,
+}) => {
+  await mockAuth(page);
+  await page.route("**/.netlify/functions/api?action=diagnose-stock", (route) =>
+    route.fulfill({
+      status: 202,
+      json: {
+        diagnostic_id: "33333333-3333-4333-8333-333333333333",
+        dispatch_confirmed: true,
+      },
+    }),
+  );
+  await page.goto("/");
+  await login(page);
+  await page
+    .getByRole("button", { name: "Vehicle stock 2", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Test DealerOS connection", exact: true })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "DealerOS diagnostic queued:" }),
+  ).toContainText("Acceptance is not a successful connectivity result.");
+});

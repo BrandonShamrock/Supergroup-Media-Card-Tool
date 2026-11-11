@@ -18,6 +18,7 @@ test("background migration preserves transactional safeguards, single claims and
       "202611100001_integration.sql",
       "202611100002_dealership_seed.sql",
       "202611110001_background_stock_refresh.sql",
+      "202611110002_dealeros_connectivity.sql",
     ])
       await db.exec(
         await readFile(
@@ -104,11 +105,61 @@ test("background migration preserves transactional safeguards, single claims and
       ]),
     );
     assert.equal((await status()).job_id, job);
+    assert.equal(
+      (
+        await db.query("select request_dealeros_diagnostic($1,$2) ok", [
+          job,
+          user,
+        ])
+      ).rows[0].ok,
+      true,
+    );
+    assert.equal(
+      (
+        await db.query("select request_dealeros_diagnostic($1,$2) ok", [
+          retry,
+          other,
+        ])
+      ).rows[0].ok,
+      false,
+    );
+    assert.equal(
+      (
+        await db.query("select claim_dealeros_diagnostic($1,$2) ok", [
+          job,
+          other,
+        ])
+      ).rows[0].ok,
+      false,
+    );
+    assert.equal(
+      (
+        await db.query("select claim_dealeros_diagnostic($1,$2) ok", [
+          job,
+          user,
+        ])
+      ).rows[0].ok,
+      true,
+    );
+    assert.equal(
+      (
+        await db.query("select claim_dealeros_diagnostic($1,$2) ok", [
+          job,
+          user,
+        ])
+      ).rows[0].ok,
+      false,
+    );
+    assert.equal((await status()).job_id, job);
     await db.exec(`set role authenticated;set request.jwt.claim.sub='${user}'`);
     await assert.rejects(
       db.query("select request_stock_sync($1,$2)", [third, user]),
     );
     await assert.rejects(db.query("select stock_sync_status()"));
+    await assert.rejects(db.query("select * from dealeros_diagnostic"));
+    await assert.rejects(
+      db.query("select request_dealeros_diagnostic($1,$2)", [third, user]),
+    );
   } finally {
     await db.close();
   }

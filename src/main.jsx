@@ -93,6 +93,7 @@ function Dashboard({ session, signOut }) {
     [mobile, setMobile] = useState(false),
     [loading, setLoading] = useState(true),
     [refreshing, setRefreshing] = useState(false),
+    [diagnosing, setDiagnosing] = useState(false),
     [audience, setAudience] = useState(null),
     [details, setDetails] = useState(null);
   const load = async () => {
@@ -211,6 +212,20 @@ function Dashboard({ session, signOut }) {
       setError(e.message);
     } finally {
       setRefreshing(false);
+    }
+  };
+  const diagnose = async () => {
+    setDiagnosing(true);
+    setError("");
+    try {
+      const result = await api("diagnose-stock", {});
+      setNotice(
+        `DealerOS diagnostic queued: ${result.diagnostic_id}. Inspect dealeros-diagnostic-background in Netlify function logs. Acceptance is not a successful connectivity result. Allow up to 90 seconds.`,
+      );
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDiagnosing(false);
     }
   };
   const save = async (form) => {
@@ -586,6 +601,15 @@ function Dashboard({ session, signOut }) {
                   {refreshing || syncActive ? "Refreshing…" : "Refresh stock"}
                 </Button>
               </Heading>
+              <Button
+                secondary
+                disabled={diagnosing || syncActive || refreshing}
+                onClick={diagnose}
+              >
+                {diagnosing
+                  ? "Queuing diagnostic…"
+                  : "Test DealerOS connection"}
+              </Button>
               <p className="stock-status">
                 Last refresh: {date(data.sync.last_success_at)} ·{" "}
                 {data.sync.vehicle_count || 0} vehicles across all dealerships
