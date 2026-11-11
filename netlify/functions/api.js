@@ -12,6 +12,7 @@ import {
   prepare,
   feed,
 } from "./lib/core.js";
+import { requestConnectivityDiagnostic } from "./lib/diagnostic-dispatch.js";
 import { stockPage } from "./lib/stock-read.js";
 import { requestStockRefresh } from "./lib/stock-refresh.js";
 import { StockError } from "./lib/dealeros.js";
@@ -80,6 +81,15 @@ export default async function handler(request) {
     if (action === "refresh")
       return json(
         await requestStockRefresh({
+          client,
+          user,
+          authorization: request.headers.get("authorization"),
+        }),
+        202,
+      );
+    if (action === "diagnose-stock")
+      return json(
+        await requestConnectivityDiagnostic({
           client,
           user,
           authorization: request.headers.get("authorization"),

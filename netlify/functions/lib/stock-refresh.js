@@ -13,6 +13,13 @@ export function logStock(event, fields = {}, logger = console.info) {
     "http_status",
     "vehicle_count",
     "db_code",
+    "error_name",
+    "cause_code",
+    "cause_codes",
+    "network_class",
+    "network_classes",
+    "redirect_same_origin",
+    "redirect_scheme",
   ]) {
     if (fields[key] !== undefined) entry[key] = fields[key];
   }

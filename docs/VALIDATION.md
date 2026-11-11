@@ -1,3 +1,18 @@
+# Latest connectivity diagnostic validation
+
+This release adds the authenticated DealerOS network diagnostic. Final local checks:
+
+- Clean `npm ci --no-audit --no-fund` and `npm run build` passed.
+- `CHROMIUM_PATH=/usr/bin/chromium npm test`: **49 tests passed** (35 unit/database/security/worker tests and 14 browser tests), no skips.
+- Foreground API, stock background worker, new diagnostic background handler and unchanged campaign worker bundled with esbuild and imported successfully as Node ESM.
+- PostgreSQL/PGlite executed all four migrations. New assertions cover diagnostic authorization, two-minute cooldown, single claim, browser-role access denial and preservation of stock job state.
+- Tests cover DNS/TLS/TCP/timeout/aggregate classifications, code-only redaction, redirect refusal, strict TLS/SNI, per-family results, headers-only GET body cancellation, proxy-presence redaction, unsafe TLS environment prevention and authenticated UI queue feedback.
+- `git diff --check` passed. There is no configured lint script.
+- Netlify account/API credentials and DealerOS credentials are absent here. No request was made from the actual Netlify runtime, and no root cause or redirect has been confirmed. Follow [diagnostic deployment/log instructions](DEALEROS_NETWORK_DIAGNOSTICS.md).
+- No PostX settings or sending process were modified or enabled. Production must retain `POSTX_LIVE_SENDING_ENABLED=false`.
+
+Prior release validation records follow for context; their test totals are superseded above.
+
 # Latest stock-refresh fix validation
 
 This release adds `202611110001_background_stock_refresh.sql` and an authenticated Netlify Background Function. Validation for this release:

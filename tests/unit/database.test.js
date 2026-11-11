@@ -30,6 +30,7 @@ async function setup() {
     "202611100001_integration.sql",
     "202611100002_dealership_seed.sql",
     "202611110001_background_stock_refresh.sql",
+    "202611110002_dealeros_connectivity.sql",
   ])
     await db.exec(
       await readFile(
